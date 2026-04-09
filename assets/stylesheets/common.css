@@ -1,0 +1,8 @@
+.group-content-hidden {
+  background: #f3f3f3;
+  border: 1px dashed #ccc;
+  padding: 10px;
+  border-radius: 6px;
+  color: #666;
+  font-size: 0.9em;
+}

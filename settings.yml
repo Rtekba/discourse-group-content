@@ -1,0 +1,4 @@
+plugins:
+  group_content_enabled:
+    default: true
+    client: true
