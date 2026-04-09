@@ -2,30 +2,24 @@
 
 # name: discourse-group-content
 # about: Show parts of posts only to selected groups
-# version: 0.2
+# version: 0.3
 # authors: Rtekba
 
 enabled_site_setting :group_content_enabled
 
 after_initialize do
-  require_dependency "pretty_text"
 
-  # Zamienia [group=xxx] na HTML
-  PrettyText.add_preprocessor do |text, opts|
-    text.gsub(/\[group=(.*?)\](.*?)\[\/group\]/m) do
-      group = Regexp.last_match(1)
-      content = Regexp.last_match(2)
+  # Hook w momencie renderowania posta
+  add_to_class(Post, :cook) do |raw, opts = {}|
 
-      "<div class='group-content' data-group='#{group}'>#{content}</div>"
-    end
-  end
+    cooked = super(raw, opts)
 
-  # Ukrywa content jeśli user nie ma dostępu
-  PrettyText.add_post_processor do |doc, opts|
     user = opts[:user]
 
-    doc.css(".group-content").each do |node|
-      group_name = node["data-group"]
+    cooked.gsub(/<group name="(.*?)">(.*?)<\/group>/m) do
+      group_name = Regexp.last_match(1)
+      content = Regexp.last_match(2)
+
       group = Group.find_by(name: group_name)
 
       allowed =
@@ -33,11 +27,32 @@ after_initialize do
         group &&
         (user.groups.include?(group) || user.admin?)
 
-      unless allowed
-        node.replace(
-          "<div class='group-content-hidden'>🔒 Post widoczny tylko dla grupy, której członkiem nie jesteś.</div>"
-        )
+      if allowed
+        content
+      else
+        "<div class='group-content-hidden'>🔒 Nie masz dostępu do tego postu</div>"
       end
     end
   end
+
+  # zamiana shortcode -> HTML (na etapie zapisu)
+  Post.class_eval do
+    after_save :inject_group_tags
+
+    def inject_group_tags
+      return unless raw.present?
+
+      new_raw = raw.gsub(/\[group=(.*?)\](.*?)\[\/group\]/m) do
+        group = Regexp.last_match(1)
+        content = Regexp.last_match(2)
+
+        "<group name='#{group}'>#{content}</group>"
+      end
+
+      if new_raw != raw
+        update_column(:raw, new_raw)
+      end
+    end
+  end
+
 end
