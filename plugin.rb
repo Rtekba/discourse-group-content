@@ -2,7 +2,7 @@
 
 # name: discourse-group-content
 # about: Show parts of posts only to selected groups
-# version: 0.1
+# version: 0.2
 # authors: Rtekba
 
 enabled_site_setting :group_content_enabled
@@ -10,17 +10,18 @@ enabled_site_setting :group_content_enabled
 after_initialize do
   require_dependency "pretty_text"
 
-  # Rejestrujemy custom tag [group=name]
-  PrettyText::Engine.register_markup_context do |context|
-    context.register_tag("group") do |attrs, content|
-      group_name = attrs[0]
+  # Zamienia [group=xxx] na HTML
+  PrettyText.add_preprocessor do |text, opts|
+    text.gsub(/\[group=(.*?)\](.*?)\[\/group\]/m) do
+      group = Regexp.last_match(1)
+      content = Regexp.last_match(2)
 
-      "<div class='group-content' data-group='#{group_name}'>#{content}</div>"
+      "<div class='group-content' data-group='#{group}'>#{content}</div>"
     end
   end
 
-  # Przetwarzanie HTML po renderze
-  PrettyText::Engine.add_preprocessor do |doc, opts|
+  # Ukrywa content jeśli user nie ma dostępu
+  PrettyText.add_post_processor do |doc, opts|
     user = opts[:user]
 
     doc.css(".group-content").each do |node|
@@ -34,7 +35,7 @@ after_initialize do
 
       unless allowed
         node.replace(
-          "<div class='group-content-hidden'>🔒 Ta treść jest dostępna tylko dla grupy: #{group_name}</div>"
+          "<div class='group-content-hidden'>🔒 Post widoczny tylko dla grupy, której członkiem nie jesteś.</div>"
         )
       end
     end
